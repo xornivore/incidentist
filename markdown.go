@@ -10,6 +10,8 @@ type markdown struct {
 }
 
 func link(desc, link string) string {
+	desc = strings.ReplaceAll(desc, "[", "|")
+	desc = strings.ReplaceAll(desc, "]", "|")
 	return fmt.Sprintf("[%s](%s)", desc, link)
 }
 
