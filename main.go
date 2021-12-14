@@ -17,6 +17,7 @@ import (
 var (
 	authToken = kingpin.Flag("auth", "Auth token").String()
 	team      = kingpin.Flag("team", "Team").Required().String()
+	pdTeam    = kingpin.Flag("pd-team", "Team in PagerDuty if different from Team").String()
 	since     = kingpin.Flag("since", "Since date/time").Required().String()
 	until     = kingpin.Flag("until", "Until date/time").Required().String()
 	urgency   = kingpin.Flag("urgency", "Urgency").Default("high").String()
@@ -63,7 +64,11 @@ func main() {
 		exit("Failed to fetch incidents from Datadog: %v", err)
 	}
 
-	pages, err := fetchPages(*team, *since, *until)
+	pagerdutyTeam := *team
+	if pdTeam != nil {
+		pagerdutyTeam = *pdTeam
+	}
+	pages, err := fetchPages(pagerdutyTeam, *since, *until)
 	if err != nil {
 		exit("Failed to fetch PagerDuty pages: %v", err)
 	}
