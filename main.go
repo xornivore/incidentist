@@ -284,7 +284,7 @@ func fetchIncidents(team string, since, until time.Time) ([]*incident, error) {
 
 		commander := i.Attributes.Commander.User
 
-		incidents = append(incidents, &incident{
+		incident := &incident{
 			id:                     fmt.Sprintf("#incident-%d", id),
 			title:                  i.Attributes.Title,
 			link:                   fmt.Sprintf("https://app.datadoghq.com/incidents/%d", id),
@@ -296,8 +296,12 @@ func fetchIncidents(team string, since, until time.Time) ([]*incident, error) {
 			customerImpactScope:    *i.Attributes.CustomerImpactScope.Get(),
 			customerImpactDuration: time.Duration(*i.Attributes.CustomerImpactDuration * int64(time.Second)),
 			createdAt:              *i.Attributes.Created,
-			resolvedAt:             *i.Attributes.Resolved.Get(),
-		})
+		}
+		if i.Attributes.Resolved.IsSet() && i.Attributes.Resolved.Get() != nil {
+			incident.resolvedAt = *i.Attributes.Resolved.Get()
+		}
+
+		incidents = append(incidents, incident)
 
 	}
 	return incidents, nil
