@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -304,5 +305,9 @@ func fetchIncidents(team string, since, until time.Time) ([]*incident, error) {
 		incidents = append(incidents, incident)
 
 	}
+	byCreatedAt := func(i, j int) bool {
+		return incidents[i].createdAt.Before(incidents[j].createdAt)
+	}
+	sort.Slice(incidents, byCreatedAt)
 	return incidents, nil
 }
