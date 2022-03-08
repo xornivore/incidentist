@@ -196,25 +196,9 @@ func fetchPages(team, since, until string) ([]*page, error) {
 
 	regexReplace := getRegexReplace()
 
-	teams, err := client.ListTeams(pagerduty.ListTeamOptions{
-		APIListObject: pagerduty.APIListObject{
-			Limit: 10000,
-		},
-	})
+	teamID, err := getTeamId(team, client)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list teams: %v", err)
-	}
-
-	var teamID string
-	for _, t := range teams.Teams {
-		if strings.ToLower(t.Name) == team {
-			teamID = t.ID
-			break
-		}
-	}
-
-	if teamID == "" {
-		return nil, fmt.Errorf("team %s not found", team)
+		return nil, err
 	}
 
 	incResp, err := client.ListIncidents(pagerduty.ListIncidentsOptions{
@@ -310,4 +294,34 @@ func fetchIncidents(team string, since, until time.Time) ([]*incident, error) {
 	}
 	sort.Slice(incidents, byCreatedAt)
 	return incidents, nil
+}
+
+// getTeamId searches for the pager duty team id given its team name
+func getTeamId(name string, client *pagerduty.Client) (string, error) {
+	var offset uint
+	// Paginate through results until we find the team there are no more results
+	for {
+		response, err := client.ListTeams(pagerduty.ListTeamOptions{
+			APIListObject: pagerduty.APIListObject{
+				Offset: offset,
+				// PD only allows up to 100 results through the API
+				Limit: 100,
+			},
+		})
+
+		if err != nil {
+			return "", fmt.Errorf("failed to list teams: %v", err)
+		}
+
+		for _, t := range response.Teams {
+			if strings.ToLower(t.Name) == name {
+				return t.ID, nil
+			}
+		}
+		if !response.More {
+			return "", fmt.Errorf("team %s not found", team)
+		}
+
+		offset += response.Limit
+	}
 }
