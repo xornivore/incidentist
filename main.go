@@ -67,7 +67,7 @@ func main() {
 
 	pagerdutyTeam := *team
 	if pdTeam != nil {
-		pagerdutyTeam = *pdTeam
+		pagerdutyTeam = strings.ToLower(*pdTeam)
 	}
 	pages, err := fetchPages(pagerdutyTeam, *since, *until)
 	if err != nil {
@@ -319,7 +319,7 @@ func getTeamId(name string, client *pagerduty.Client) (string, error) {
 			}
 		}
 		if !response.More {
-			return "", fmt.Errorf("team %s not found", team)
+			return "", fmt.Errorf("team %s not found", name)
 		}
 
 		offset += response.Limit
