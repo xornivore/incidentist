@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -17,13 +16,14 @@ import (
 )
 
 var (
-	authToken = kingpin.Flag("auth", "Auth token").String()
-	team      = kingpin.Flag("team", "Team").Required().String()
-	pdTeam    = kingpin.Flag("pd-team", "Team in PagerDuty if different from Team").String()
-	since     = kingpin.Flag("since", "Since date/time").Required().String()
-	until     = kingpin.Flag("until", "Until date/time").Required().String()
-	urgency   = kingpin.Flag("urgency", "Urgency").Default("high").String()
-	replace   = kingpin.Flag("replace", "Replace titles with regex").Strings()
+	authToken  = kingpin.Flag("auth", "Auth token").String()
+	team       = kingpin.Flag("team", "Team").Required().String()
+	pdTeam     = kingpin.Flag("pd-team", "Team in PagerDuty if different from Team").String()
+	since      = kingpin.Flag("since", "Since date/time").Required().String()
+	until      = kingpin.Flag("until", "Until date/time").Required().String()
+	urgency    = kingpin.Flag("urgency", "Urgency").Default("high").String()
+	replace    = kingpin.Flag("replace", "Replace titles with regex").Strings()
+	tagFilters = kingpin.Flag("tags", "Filter PagerDuty incidents by Datadog tags").Strings()
 )
 
 const (
@@ -66,13 +66,11 @@ func main() {
 		exit("Failed to fetch incidents from Datadog: %v", err)
 	}
 
-	var pages []*page
+	pagerdutyTeam := *team
 	if pdTeam != nil {
-		*pdTeam = strings.ToLower(*pdTeam)
-		pages, err = fetchPages(*pdTeam, *since, *until, *team)
-	} else {
-		pages, err = fetchPages(*team, *since, *until, "")
+		pagerdutyTeam = strings.ToLower(*pdTeam)
 	}
+	pages, err := fetchPages(pagerdutyTeam, *since, *until, *tagFilters)
 	if err != nil {
 		exit("Failed to fetch PagerDuty pages: %v", err)
 	}
@@ -194,10 +192,7 @@ type incident struct {
 	pages                  []*page
 }
 
-// fetchPages fetches pages from the Pagerduty API
-// If matchTeam is provided, fetchPages will require that it matches the tagged team in the
-// associated Datadog monitor attached to the incident alert.
-func fetchPages(pagerdutyTeam, since, until, matchTeam string) ([]*page, error) {
+func fetchPages(pagerdutyTeam, since, until string, tagFilters []string) ([]*page, error) {
 	client := pagerduty.NewClient(*authToken)
 
 	regexReplace := getRegexReplace()
@@ -224,14 +219,11 @@ func fetchPages(pagerdutyTeam, since, until, matchTeam string) ([]*page, error) 
 	var pages []*page
 
 	for _, p := range incResp.Incidents {
-		if len(matchTeam) > 0 {
-			incidentTeam, err := fetchTeamForPagerdutyIncident(client, p.Id)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Could not fetch team for incident %s, skipping: %v\n", p.Id, err)
+		if tagFilters != nil && len(tagFilters) > 0 {
+			if matched, err := pagerdutyIncidentMatchesTags(client, p.Id, tagFilters); err != nil {
+				fmt.Fprintf(os.Stderr, "Could not fetch tags for incident %s, skipping: %v\n", p.Id, err)
 				continue
-			}
-
-			if incidentTeam != matchTeam {
+			} else if !matched {
 				continue
 			}
 		}
@@ -251,31 +243,62 @@ func fetchPages(pagerdutyTeam, since, until, matchTeam string) ([]*page, error) 
 	return pages, nil
 }
 
-func fetchTeamForPagerdutyIncident(client *pagerduty.Client, incidentId string) (string, error) {
+func pagerdutyIncidentMatchesTags(client *pagerduty.Client, incidentId string, tagFilters []string) (bool, error) {
 	alertsResp, err := client.ListIncidentAlerts(incidentId)
 	if err != nil {
-		return "", err
+		return false, err
 	}
 
 	for _, a := range alertsResp.Alerts {
-		if details, ok := a.Body["details"]; ok {
-			if detailsMap, ok := details.(map[string]interface{}); ok {
-				if tags, ok := detailsMap["tags"]; ok {
-					if tagsString, ok := tags.(string); ok {
-						tokens := strings.Split(tagsString, ",")
-						for _, token := range tokens {
-							cleaned := strings.TrimSpace(token)
-							if strings.HasPrefix(cleaned, "team:") {
-								return cleaned[strings.Index(cleaned, ":")+1:], nil
-							}
-						}
-					}
-				}
+		alertTags := getTagsFromPagerdutyAlert(a)
+		if alertTags == nil {
+			continue
+		}
+
+		found := true
+		for _, tagFilter := range tagFilters {
+			if _, ok := alertTags[tagFilter]; !ok {
+				found = false
+				break
 			}
+		}
+
+		if found {
+			return true, nil
 		}
 	}
 
-	return "", errors.New("no team tag found")
+	return false, nil
+}
+
+func getTagsFromPagerdutyAlert(alert pagerduty.IncidentAlert) map[string]struct{} {
+	details, ok := alert.Body["details"]
+	if !ok {
+		return nil
+	}
+
+	detailsMap, ok := details.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	tags, ok := detailsMap["tags"]
+	if !ok {
+		return nil
+	}
+
+	tagsString, ok := tags.(string)
+	if !ok {
+		return nil
+	}
+
+	tokens := strings.Split(tagsString, ",")
+	alertTags := make(map[string]struct{})
+	for _, token := range tokens {
+		alertTags[strings.TrimSpace(token)] = struct{}{}
+	}
+
+	return alertTags
 }
 
 func fetchIncidents(team string, since, until time.Time) ([]*incident, error) {
