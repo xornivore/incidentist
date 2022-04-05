@@ -219,13 +219,13 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string) ([]*pag
 	var pages []*page
 
 	for _, p := range incResp.Incidents {
-		if tagFilters != nil && len(tagFilters) > 0 {
-			if matched, err := pagerdutyIncidentMatchesTags(client, p.Id, tagFilters); err != nil {
-				fmt.Fprintf(os.Stderr, "Could not fetch tags for incident %s, skipping: %v\n", p.Id, err)
-				continue
-			} else if !matched {
-				continue
-			}
+		matched, err := pagerdutyIncidentMatchesTags(client, p.Id, tagFilters)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Could not fetch tags for incident %s, skipping: %v\n", p.Id, err)
+			continue
+		}
+		if !matched {
+			continue
 		}
 
 		title := p.Title
@@ -244,6 +244,10 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string) ([]*pag
 }
 
 func pagerdutyIncidentMatchesTags(client *pagerduty.Client, incidentId string, tagFilters []string) (bool, error) {
+	if tagFilters == nil || len(tagFilters) == 0 {
+		return true, nil
+	}
+
 	alertsResp, err := client.ListIncidentAlerts(incidentId)
 	if err != nil {
 		return false, err
