@@ -16,13 +16,14 @@ import (
 )
 
 var (
-	authToken = kingpin.Flag("auth", "Auth token").String()
-	team      = kingpin.Flag("team", "Team").Required().String()
-	pdTeam    = kingpin.Flag("pd-team", "Team in PagerDuty if different from Team").String()
-	since     = kingpin.Flag("since", "Since date/time").Required().String()
-	until     = kingpin.Flag("until", "Until date/time").Required().String()
-	urgency   = kingpin.Flag("urgency", "Urgency").Default("high").String()
-	replace   = kingpin.Flag("replace", "Replace titles with regex").Strings()
+	authToken  = kingpin.Flag("auth", "Auth token").String()
+	team       = kingpin.Flag("team", "Team").Required().String()
+	pdTeam     = kingpin.Flag("pd-team", "Team in PagerDuty if different from Team").String()
+	since      = kingpin.Flag("since", "Since date/time").Required().String()
+	until      = kingpin.Flag("until", "Until date/time").Required().String()
+	urgency    = kingpin.Flag("urgency", "Urgency").Default("high").String()
+	replace    = kingpin.Flag("replace", "Replace titles with regex").Strings()
+	tagFilters = kingpin.Flag("tags", "Filter PagerDuty incidents by Datadog tags").Strings()
 )
 
 const (
@@ -67,9 +68,9 @@ func main() {
 
 	pagerdutyTeam := *team
 	if pdTeam != nil {
-		pagerdutyTeam = *pdTeam
+		pagerdutyTeam = strings.ToLower(*pdTeam)
 	}
-	pages, err := fetchPages(pagerdutyTeam, *since, *until)
+	pages, err := fetchPages(pagerdutyTeam, *since, *until, *tagFilters)
 	if err != nil {
 		exit("Failed to fetch PagerDuty pages: %v", err)
 	}
@@ -191,12 +192,12 @@ type incident struct {
 	pages                  []*page
 }
 
-func fetchPages(team, since, until string) ([]*page, error) {
+func fetchPages(pagerdutyTeam, since, until string, tagFilters []string) ([]*page, error) {
 	client := pagerduty.NewClient(*authToken)
 
 	regexReplace := getRegexReplace()
 
-	teamID, err := getTeamId(team, client)
+	teamID, err := getTeamId(pagerdutyTeam, client)
 	if err != nil {
 		return nil, err
 	}
@@ -218,6 +219,15 @@ func fetchPages(team, since, until string) ([]*page, error) {
 	var pages []*page
 
 	for _, p := range incResp.Incidents {
+		matched, err := pagerdutyIncidentMatchesTags(client, p.Id, tagFilters)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Could not fetch tags for incident %s, skipping: %v\n", p.Id, err)
+			continue
+		}
+		if !matched {
+			continue
+		}
+
 		title := p.Title
 		for r, replace := range regexReplace {
 			title = r.ReplaceAllString(title, replace)
@@ -231,6 +241,68 @@ func fetchPages(team, since, until string) ([]*page, error) {
 
 	}
 	return pages, nil
+}
+
+func pagerdutyIncidentMatchesTags(client *pagerduty.Client, incidentId string, tagFilters []string) (bool, error) {
+	if tagFilters == nil || len(tagFilters) == 0 {
+		return true, nil
+	}
+
+	alertsResp, err := client.ListIncidentAlerts(incidentId)
+	if err != nil {
+		return false, err
+	}
+
+	for _, a := range alertsResp.Alerts {
+		alertTags := getTagsFromPagerdutyAlert(a)
+		if alertTags == nil {
+			continue
+		}
+
+		found := true
+		for _, tagFilter := range tagFilters {
+			if _, ok := alertTags[tagFilter]; !ok {
+				found = false
+				break
+			}
+		}
+
+		if found {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func getTagsFromPagerdutyAlert(alert pagerduty.IncidentAlert) map[string]struct{} {
+	details, ok := alert.Body["details"]
+	if !ok {
+		return nil
+	}
+
+	detailsMap, ok := details.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	tags, ok := detailsMap["tags"]
+	if !ok {
+		return nil
+	}
+
+	tagsString, ok := tags.(string)
+	if !ok {
+		return nil
+	}
+
+	tokens := strings.Split(tagsString, ",")
+	alertTags := make(map[string]struct{})
+	for _, token := range tokens {
+		alertTags[strings.TrimSpace(token)] = struct{}{}
+	}
+
+	return alertTags
 }
 
 func fetchIncidents(team string, since, until time.Time) ([]*incident, error) {
@@ -319,7 +391,7 @@ func getTeamId(name string, client *pagerduty.Client) (string, error) {
 			}
 		}
 		if !response.More {
-			return "", fmt.Errorf("team %s not found", team)
+			return "", fmt.Errorf("team %s not found", name)
 		}
 
 		offset += response.Limit
