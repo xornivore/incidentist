@@ -137,6 +137,17 @@ func main() {
 			continue
 		}
 		md.unordered(1, link(p.createdAt.Local().Format(timeFormat)+" "+p.title, p.link))
+		if len(p.notes) != 0 {
+			md.unordered(2, "**Notes**:")
+			for _, n := range p.notes {
+				if n.userEmail != "" {
+					md.unordered(3, fmt.Sprintf("**%s**: %s", n.userEmail, n.content))
+				} else {
+					md.unordered(3, n.content)
+				}
+			}
+			md.br()
+		}
 		md.unordered(2, "**Action taken**: "+filloutPlaceholder)
 		md.unordered(2, "**Follow-up**: "+filloutPlaceholder)
 	}
@@ -169,11 +180,18 @@ func newUInt64(v uint64) *uint64 {
 	return &v
 }
 
+type pageNote struct {
+	content   string
+	userName  string
+	userEmail string
+}
+
 type page struct {
 	title       string
 	link        string
 	createdAt   time.Time
 	incidentIDs []string
+	notes       []pageNote
 }
 
 type incident struct {
@@ -233,12 +251,34 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string) ([]*pag
 			title = r.ReplaceAllString(title, replace)
 		}
 		createdAt, _ := time.Parse(time.RFC3339, p.CreatedAt)
+
+		notes, err := client.ListIncidentNotes(p.Id)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Could not fetch notes for incident %s, skipping: %v\n", p.Id, err)
+			continue
+		}
+
+		var pageNotes []pageNote
+		for _, n := range notes {
+			note := pageNote{
+				content: n.Content,
+			}
+
+			if u, err := client.GetUser(n.User.ID, pagerduty.GetUserOptions{}); err != nil {
+				fmt.Fprintf(os.Stderr, "Could not fetch user %s, ignoring: %v\n", n.User.ID, err)
+			} else {
+				note.userName = u.Name
+				note.userEmail = u.Email
+			}
+			pageNotes = append(pageNotes, note)
+		}
+
 		pages = append(pages, &page{
 			title:     p.Title,
 			link:      p.HTMLURL,
 			createdAt: createdAt,
+			notes:     pageNotes,
 		})
-
 	}
 	return pages, nil
 }
