@@ -40,7 +40,6 @@ func exit(format string, a ...interface{}) {
 }
 
 func main() {
-
 	kingpin.Parse()
 	*team = strings.ToLower(*team)
 	if *authToken == "" {
@@ -137,6 +136,7 @@ func main() {
 			continue
 		}
 		md.unordered(1, link(p.createdAt.Local().Format(timeFormat)+" "+p.title, p.link))
+		md.unordered(2, fmt.Sprintf("**Ack'ed by**: %s", strings.Join(p.responders, ", ")))
 		if len(p.notes) != 0 {
 			md.unordered(2, "**Notes**:")
 			for _, n := range p.notes {
@@ -191,6 +191,7 @@ type page struct {
 	link        string
 	createdAt   time.Time
 	incidentIDs []string
+	responders  []string
 	notes       []pageNote
 }
 
@@ -221,13 +222,12 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string) ([]*pag
 	}
 
 	incResp, err := client.ListIncidents(pagerduty.ListIncidentsOptions{
-		APIListObject: pagerduty.APIListObject{
-			Limit: 1000,
-		},
+		Limit:     1000,
 		TeamIDs:   []string{teamID},
 		Since:     since,
 		Until:     until,
 		Urgencies: []string{*urgency},
+		// Includes:  []string{"users", "acknowledgers", "acknowledgers"},
 	})
 
 	if err != nil {
@@ -237,9 +237,9 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string) ([]*pag
 	var pages []*page
 
 	for _, p := range incResp.Incidents {
-		matched, err := pagerdutyIncidentMatchesTags(client, p.Id, tagFilters)
+		matched, err := pagerdutyIncidentMatchesTags(client, p.ID, tagFilters)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Could not fetch tags for incident %s, skipping: %v\n", p.Id, err)
+			fmt.Fprintf(os.Stderr, "Could not fetch tags for incident %s, skipping: %v\n", p.ID, err)
 			continue
 		}
 		if !matched {
@@ -252,9 +252,9 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string) ([]*pag
 		}
 		createdAt, _ := time.Parse(time.RFC3339, p.CreatedAt)
 
-		notes, err := client.ListIncidentNotes(p.Id)
+		notes, err := client.ListIncidentNotes(p.ID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Could not fetch notes for incident %s, skipping: %v\n", p.Id, err)
+			fmt.Fprintf(os.Stderr, "Could not fetch notes for incident %s, skipping: %v\n", p.ID, err)
 			continue
 		}
 
@@ -273,11 +273,31 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string) ([]*pag
 			pageNotes = append(pageNotes, note)
 		}
 
+		logs, _ := client.ListIncidentLogEntries(p.ID, pagerduty.ListIncidentLogEntriesOptions{})
+
+		var responders []string
+		for _, l := range logs.LogEntries {
+
+			for _, a := range l.Assignees {
+				if a.Type != "user_reference" {
+					continue
+				}
+
+				u, err := client.GetUser(a.ID, pagerduty.GetUserOptions{})
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Could not fetch user %s, ignoring: %v\n", a.ID, err)
+					continue
+				}
+				responders = append(responders, u.Email)
+			}
+		}
+
 		pages = append(pages, &page{
-			title:     p.Title,
-			link:      p.HTMLURL,
-			createdAt: createdAt,
-			notes:     pageNotes,
+			title:      p.Title,
+			link:       p.HTMLURL,
+			createdAt:  createdAt,
+			responders: responders,
+			notes:      pageNotes,
 		})
 	}
 	return pages, nil
@@ -414,11 +434,8 @@ func getTeamId(name string, client *pagerduty.Client) (string, error) {
 	// Paginate through results until we find the team there are no more results
 	for {
 		response, err := client.ListTeams(pagerduty.ListTeamOptions{
-			APIListObject: pagerduty.APIListObject{
-				Offset: offset,
-				// PD only allows up to 100 results through the API
-				Limit: 100,
-			},
+			Offset: offset,
+			Limit:  100, // PD only allows up to 100 results through the API
 		})
 
 		if err != nil {
