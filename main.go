@@ -59,6 +59,9 @@ func main() {
 	if err != nil {
 		exit("Failed to parse --until: %v", err)
 	}
+	if untilAt.Before(sinceAt) {
+		exit(fmt.Sprintf("--since must start before --until. --since: %s, --until: %s", *since, *until))
+	}
 
 	incidents, err := fetchIncidents(*team, sinceAt, untilAt)
 	if err != nil {
