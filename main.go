@@ -17,7 +17,7 @@ import (
 
 var (
 	authToken  = kingpin.Flag("auth", "Auth token").String()
-	team       = kingpin.Flag("team", "Team").Required().String()
+	teams      = kingpin.Flag("team", "Team").Required().Strings()
 	pdTeam     = kingpin.Flag("pd-team", "Team in PagerDuty if different from Team").String()
 	since      = kingpin.Flag("since", "Since date/time").Required().String()
 	until      = kingpin.Flag("until", "Until date/time").Required().String()
@@ -41,7 +41,10 @@ func exit(format string, a ...interface{}) {
 
 func main() {
 	kingpin.Parse()
-	*team = strings.ToLower(*team)
+	for i := range *teams {
+		(*teams)[i] = strings.ToLower((*teams)[i])
+	}
+
 	if *authToken == "" {
 		*authToken = os.Getenv("PD_AUTH_TOKEN")
 	}
@@ -63,12 +66,19 @@ func main() {
 		exit(fmt.Sprintf("--since must start before --until. --since: %s, --until: %s", *since, *until))
 	}
 
-	incidents, err := fetchIncidents(*team, sinceAt, untilAt)
-	if err != nil {
-		exit("Failed to fetch incidents from Datadog: %v", err)
+	var incidents []*incident
+	for _, team := range *teams {
+		teamIncidents, err := fetchIncidents(team, sinceAt, untilAt)
+		if err != nil {
+			exit("Failed to fetch incidents from Datadog: %v", err)
+		}
+		incidents = append(incidents, teamIncidents...)
 	}
 
-	pagerdutyTeam := *team
+	var pagerdutyTeam string
+	if len(*teams) >= 1 {
+		pagerdutyTeam = (*teams)[0]
+	}
 	if pdTeam != nil {
 		pagerdutyTeam = strings.ToLower(*pdTeam)
 	}
@@ -89,7 +99,7 @@ func main() {
 
 	var md markdown
 
-	title := strings.Title(fmt.Sprintf("%s On-Call Report %s", *team, *until))
+	title := strings.Title(fmt.Sprintf("%s On-Call Report %s", strings.Join(*teams, ", "), *until))
 
 	fmt.Println("---")
 	fmt.Printf("title: %s\n", title)
