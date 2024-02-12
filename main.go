@@ -41,6 +41,16 @@ func main() {
 		exit("missing auth token (--auth or PD_AUTH_TOKEN)")
 	}
 
+	ddApiKey := os.Getenv("DD_API_KEY")
+	if ddApiKey == "" {
+		exit("missing datadog api key (DD_API_KEY)")
+	}
+	
+	ddAppKey := os.Getenv("DD_APP_KEY")
+	if ddAppKey == "" {
+		exit("missing datadog app key (DD_APP_KEY)")
+	}
+
 	request := report.GenerateReportRequest{
 		Team:       *team,
 		PdTeam:     *pdTeam,
@@ -50,6 +60,8 @@ func main() {
 		AuthToken:  *authToken,
 		Urgency:    *urgency,
 		Replace:    *replace,
+		DdApiKey:   ddApiKey,
+		DdAppKey:   ddAppKey,
 	}
 
 	report, err := report.GenerateReport(request)

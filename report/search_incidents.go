@@ -410,8 +410,8 @@ type incident struct {
 	pages                  []*page
 }
 
-func fetchIncidents(team string, since, until time.Time) ([]*incident, error) {
-	ctx := datadog.NewDefaultContext(context.Background())
+func fetchIncidents(team, ddApiKey, ddAppKey string, since, until time.Time) ([]*incident, error) {
+	ctx := getDatadogAPIContext(ddApiKey, ddAppKey)
 	configuration := datadog.NewConfiguration()
 	configuration.SetUnstableOperationEnabled("ListIncidents", true)
 	apiClient := datadog.NewAPIClient(configuration)
@@ -471,4 +471,25 @@ func fetchIncidents(team string, since, until time.Time) ([]*incident, error) {
 	}
 	sort.Slice(incidents, byCreatedAt)
 	return incidents, nil
+}
+
+func getDatadogAPIContext(ddApiKey, ddAppKey string) context.Context {
+	ctx := context.Background()
+
+	// always load incidents from US1
+	ctx = context.WithValue(
+		ctx,
+		datadog.ContextServerVariables,
+		map[string]string{"site": "datadoghq.com"},
+	)
+
+	keys := make(map[string]datadog.APIKey)
+	keys["apiKeyAuth"] = datadog.APIKey{Key: ddApiKey}
+	keys["appKeyAuth"] = datadog.APIKey{Key: ddAppKey}
+	ctx = context.WithValue(
+		ctx,
+		datadog.ContextAPIKeys,
+		keys,
+	)
+	return ctx
 }

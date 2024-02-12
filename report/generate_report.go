@@ -20,6 +20,8 @@ type GenerateReportRequest struct {
 	AuthToken  string
 	Urgency    string
 	Replace    []string
+	DdApiKey   string
+	DdAppKey   string
 }
 
 func GenerateReport(request GenerateReportRequest) (string, error) {
@@ -28,7 +30,7 @@ func GenerateReport(request GenerateReportRequest) (string, error) {
 		return "", err
 	}
 
-	incidents, err := fetchIncidents(request.Team, sinceAt, untilAt)
+	incidents, err := fetchIncidents(request.Team, request.DdApiKey, request.DdAppKey, sinceAt, untilAt)
 	if err != nil {
 		return "", err
 	}
