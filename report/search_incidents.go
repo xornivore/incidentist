@@ -1,4 +1,4 @@
-package main
+package report
 
 import (
 	"bytes"
@@ -10,8 +10,10 @@ import (
 	"io/ioutil"
 	nethttp "net/http"
 	neturl "net/url"
+	"os"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -390,4 +392,83 @@ func searchIncidents(ctx context.Context, client *datadog.APIClient, r *searchRe
 	}
 
 	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
+type incident struct {
+	id                     string
+	title                  string
+	link                   string
+	sev                    string
+	commander              string
+	commanderEmail         string
+	rootCause              string
+	summary                string
+	customerImpactScope    string
+	customerImpactDuration time.Duration
+	createdAt              time.Time
+	resolvedAt             time.Time
+	pages                  []*page
+}
+
+func fetchIncidents(team string, since, until time.Time) ([]*incident, error) {
+	ctx := datadog.NewDefaultContext(context.Background())
+	configuration := datadog.NewConfiguration()
+	configuration.SetUnstableOperationEnabled("ListIncidents", true)
+	apiClient := datadog.NewAPIClient(configuration)
+
+	createdAfter := since.UTC().Unix()
+	createdBefore := until.UTC().Unix()
+	req := &searchRequest{
+		createdAfter:  &createdAfter,
+		createdBefore: &createdBefore,
+		tags: []string{
+			"teams:" + team,
+		},
+	}
+
+	resp, r, err := searchIncidents(ctx, apiClient, req)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+		return nil, fmt.Errorf("Error when calling `IncidentsApi.SearchIncidents`: %w", err)
+	}
+
+	if resp.Incidents == nil {
+		return nil, nil
+	}
+
+	var incidents []*incident
+	for _, i := range *resp.Incidents {
+		if i.Type != "incidents" {
+			continue
+		}
+		id := i.Attributes.GetPublicId()
+
+		commander := i.Attributes.Commander.User
+
+		incident := &incident{
+			id:                     fmt.Sprintf("#incident-%d", id),
+			title:                  i.Attributes.Title,
+			link:                   fmt.Sprintf("https://app.datadoghq.com/incidents/%d", id),
+			commander:              *commander.Attributes.Name.Get(),
+			commanderEmail:         *commander.Attributes.Email,
+			sev:                    i.Attributes.GetFields()["severity"].IncidentFieldAttributesSingleValue.GetValue(),
+			rootCause:              i.Attributes.GetFields()["root_cause"].IncidentFieldAttributesSingleValue.GetValue(),
+			summary:                i.Attributes.GetFields()["summary"].IncidentFieldAttributesSingleValue.GetValue(),
+			customerImpactScope:    *i.Attributes.CustomerImpactScope.Get(),
+			customerImpactDuration: time.Duration(*i.Attributes.CustomerImpactDuration * int64(time.Second)),
+			createdAt:              *i.Attributes.Created,
+		}
+		if i.Attributes.Resolved.IsSet() && i.Attributes.Resolved.Get() != nil {
+			incident.resolvedAt = *i.Attributes.Resolved.Get()
+		}
+
+		incidents = append(incidents, incident)
+
+	}
+	byCreatedAt := func(i, j int) bool {
+		return incidents[i].createdAt.Before(incidents[j].createdAt)
+	}
+	sort.Slice(incidents, byCreatedAt)
+	return incidents, nil
 }
