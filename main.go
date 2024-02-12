@@ -45,7 +45,7 @@ func main() {
 	if ddApiKey == "" {
 		exit("missing datadog api key (DD_API_KEY)")
 	}
-	
+
 	ddAppKey := os.Getenv("DD_APP_KEY")
 	if ddAppKey == "" {
 		exit("missing datadog app key (DD_APP_KEY)")
