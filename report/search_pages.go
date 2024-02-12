@@ -1,6 +1,7 @@
 package report
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -39,7 +40,7 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string, authTok
 		return nil, err
 	}
 
-	incResp, err := client.ListIncidents(pagerduty.ListIncidentsOptions{
+	incResp, err := client.ListIncidentsWithContext(context.Background(), pagerduty.ListIncidentsOptions{
 		Limit:     1000,
 		TeamIDs:   []string{teamID},
 		Since:     since,
@@ -69,7 +70,7 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string, authTok
 		}
 		createdAt, _ := time.Parse(time.RFC3339, p.CreatedAt)
 
-		notes, err := client.ListIncidentNotes(p.ID)
+		notes, err := client.ListIncidentNotesWithContext(context.Background(), p.ID)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Could not fetch notes for incident %s, skipping: %v\n", p.ID, err)
 			continue
@@ -81,7 +82,7 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string, authTok
 				content: n.Content,
 			}
 
-			if u, err := client.GetUser(n.User.ID, pagerduty.GetUserOptions{}); err != nil {
+			if u, err := client.GetUserWithContext(context.Background(), n.User.ID, pagerduty.GetUserOptions{}); err != nil {
 				fmt.Fprintf(os.Stderr, "Could not fetch user %s, ignoring: %v\n", n.User.ID, err)
 			} else {
 				note.userName = u.Name
@@ -90,7 +91,7 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string, authTok
 			pageNotes = append(pageNotes, note)
 		}
 
-		logs, _ := client.ListIncidentLogEntries(p.ID, pagerduty.ListIncidentLogEntriesOptions{})
+		logs, _ := client.ListIncidentLogEntriesWithContext(context.Background(), p.ID, pagerduty.ListIncidentLogEntriesOptions{})
 
 		var responders []string
 		for _, l := range logs.LogEntries {
@@ -100,7 +101,7 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string, authTok
 					continue
 				}
 
-				u, err := client.GetUser(a.ID, pagerduty.GetUserOptions{})
+				u, err := client.GetUserWithContext(context.Background(), a.ID, pagerduty.GetUserOptions{})
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Could not fetch user %s, ignoring: %v\n", a.ID, err)
 					continue
