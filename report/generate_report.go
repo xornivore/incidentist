@@ -56,11 +56,12 @@ func GenerateReport(request GenerateReportRequest) (string, error) {
 
 	var md markdown
 
-	title := strings.Title(fmt.Sprintf("%s On-Call Report %s", request.Team, request.Until))
+	report := strings.Builder{}
 
-	fmt.Println("---")
-	fmt.Printf("title: %s\n", title)
-	fmt.Println("---")
+	title := strings.Title(fmt.Sprintf("%s On-Call Report %s", request.Team, request.Until))
+	report.WriteString("---\n")
+	report.WriteString(fmt.Sprintf("title: %s\n", title))
+	report.WriteString("---\n")
 
 	md.para(fmt.Sprintf("Report for %s - %s: total incidents - %d, total pages - %d", request.Since, request.Until, len(incidents), len(pages)))
 
@@ -122,7 +123,8 @@ func GenerateReport(request GenerateReportRequest) (string, error) {
 		md.unordered(2, "**Follow-up**: "+filloutPlaceholder)
 	}
 
-	return md.String(), nil
+	report.WriteString(md.String())
+	return report.String(), nil
 }
 
 func parseDates(since, until string) (sinceAt, untilAt time.Time, err error) {
