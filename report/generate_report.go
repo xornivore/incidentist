@@ -1,3 +1,4 @@
+// Package report provides APIs for generating incident reports.
 package report
 
 import (
@@ -11,7 +12,7 @@ const (
 	filloutPlaceholder = "  _TODO: please fill out_"
 )
 
-type GenerateReportRequest struct {
+type GenerateRequest struct {
 	Team       string
 	PdTeam     string
 	Since      string
@@ -24,7 +25,9 @@ type GenerateReportRequest struct {
 	DdAppKey   string
 }
 
-func GenerateReport(request GenerateReportRequest) (string, error) {
+// Generate generates an incident report for the specified team and time range.
+// It fetches incidents from Datadog, pages from PagerDuty, and then associates pages with incidents and generates a markdown report.
+func Generate(request GenerateRequest) (string, error) {
 	sinceAt, untilAt, err := parseDates(request.Since, request.Until)
 	if err != nil {
 		return "", err

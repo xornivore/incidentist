@@ -51,7 +51,7 @@ func main() {
 		exit("missing datadog app key (DD_APP_KEY)")
 	}
 
-	request := report.GenerateReportRequest{
+	request := report.GenerateRequest{
 		Team:       *team,
 		PdTeam:     *pdTeam,
 		Since:      *since,
@@ -64,7 +64,7 @@ func main() {
 		DdAppKey:   ddAppKey,
 	}
 
-	report, err := report.GenerateReport(request)
+	report, err := report.Generate(request)
 	if err != nil {
 		exit("error generating report: %v", err)
 	} else {
