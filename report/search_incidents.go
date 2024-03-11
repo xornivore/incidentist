@@ -55,7 +55,7 @@ type incident struct {
 func fetchIncidents(team, ddApiKey, ddAppKey string, since, until time.Time) ([]*incident, error) {
 	ctx := getDatadogAPIContext(ddApiKey, ddAppKey)
 	configuration := datadog.NewConfiguration()
-	configuration.SetUnstableOperationEnabled("ListIncidents", true)
+	configuration.SetUnstableOperationEnabled("v2.SearchIncidents", true)
 	apiClient := datadog.NewAPIClient(configuration)
 
 	createdAfter := since.UTC().Unix()
@@ -72,7 +72,7 @@ func fetchIncidents(team, ddApiKey, ddAppKey string, since, until time.Time) ([]
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-		return nil, fmt.Errorf("Error when calling `IncidentsApi.SearchIncidents`: %w", err)
+		return nil, fmt.Errorf("Error when searching for incidents: %w", err)
 	}
 
 	if resp.Data.Attributes == nil || resp.Data.Attributes.Incidents == nil {
