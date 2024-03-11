@@ -13,15 +13,25 @@ const (
 )
 
 type GenerateRequest struct {
+	// Name of Datadog team
 	Team       string
+	// Name of PagerDuty team
 	PdTeam     string
+	// Start date of the report, in the format "YYYY-MM-DD" i.e. time.DateOnly
 	Since      string
+	// End date of the report, in the format "YYYY-MM-DD" i.e. time.DateOnly
 	Until      string
+	// Tag filters to use when fetching PagerDuty pages
 	TagFilters []string
+	// PagerDuty API token to use when fetching pages
 	AuthToken  string
+	// PagerDuty page urgency
 	Urgency    string
+	// Replacement regex to apply to PagerDuty page titles
 	Replace    []string
+	// Datadog API key to use when fetching incidents
 	DdApiKey   string
+	// Datadog application key to use when fetching incidents
 	DdAppKey   string
 }
 
