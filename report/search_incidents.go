@@ -226,9 +226,7 @@ func searchIncidents(ctx context.Context, client *datadog.APIClient, r *searchRe
 	var (
 		localVarHTTPMethod   = nethttp.MethodGet
 		localVarPostBody     interface{}
-		localVarFormFileName string
-		localVarFileName     string
-		localVarFileBytes    []byte
+		localVarFormFile 	 datadog.FormFile
 		localVarReturnValue  IncidentsSearchResponse
 	)
 
@@ -318,7 +316,7 @@ func searchIncidents(ctx context.Context, client *datadog.APIClient, r *searchRe
 			}
 		}
 	}
-	req, err := client.PrepareRequest(ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
+	req, err := client.PrepareRequest(ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, &localVarFormFile)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
