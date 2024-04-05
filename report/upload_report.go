@@ -17,12 +17,8 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 )
 
-const (
-	YYYYMMDD = "2006-01-02"
-)
-
-// ConfluencePage represents the JSON payload to create a new Confluence page
-type ConfluencePage struct {
+// confluencePage represents the JSON payload to create a new Confluence page
+type confluencePage struct {
 	Type  string `json:"type"`
 	Title string `json:"title"`
 	Space struct {
@@ -99,12 +95,12 @@ func Upload(request UploadRequest) error {
 
 	// Try to come up with some title if we couldn't parse one
 	if title == "" {
-		title = fmt.Sprintf("On-Call Report %s", time.Now().Format(YYYYMMDD))
+		title = fmt.Sprintf("On-Call Report %s", time.Now().Format(time.DateOnly))
 	}
 
 	baseURL := fmt.Sprintf("https://%s.atlassian.net/wiki/rest/api/content", request.ConfluenceSubdomain)
 	// Prepare the page payload
-	newPage := ConfluencePage{
+	newPage := confluencePage{
 		Type:  "page",
 		Title: title,
 	}

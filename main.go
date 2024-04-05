@@ -20,9 +20,9 @@ var (
 	replace    = kingpin.Flag("replace", "Replace titles with regex").Strings()
 	tagFilters = kingpin.Flag("tags", "Filter PagerDuty incidents by Datadog tags").Strings()
 	// Params for uploading the report
-	confSubdomain = kingpin.Flag("subdomain", "Confluence subdomain").String()
-	spaceKey      = kingpin.Flag("space", "Confluence space key").String()
-	parentId      = kingpin.Flag("parent", "Confluence parent page id").String()
+	subdomain = kingpin.Flag("confluence-subdomain", "Confluence subdomain").String()
+	spaceKey  = kingpin.Flag("confluence-space", "Confluence space key").String()
+	parentId  = kingpin.Flag("confluence-parent", "Confluence parent page id").String()
 )
 
 func errorf(format string, a ...interface{}) {
@@ -56,7 +56,7 @@ func main() {
 	}
 
 	var confUsername, confToken string
-	doUpload := *confSubdomain != ""
+	doUpload := *subdomain != ""
 	if doUpload {
 		// Only check these credentials if we want to upload to confluence
 		confUsername = os.Getenv("CONFLUENCE_USERNAME")
@@ -92,7 +92,7 @@ func main() {
 		exit("error generating report: %v", err)
 	} else if doUpload {
 		uploadRequest := report.UploadRequest{
-			ConfluenceSubdomain: *confSubdomain,
+			ConfluenceSubdomain: *subdomain,
 			ConfluenceUsername:  confUsername,
 			ConfluenceToken:     confToken,
 			SpaceKey:            *spaceKey,
@@ -106,7 +106,7 @@ func main() {
 			fmt.Println("Report uploaded successfully")
 		}
 	} else {
-		// If not uploading, just dump to stderr.
+		// If not uploading, just dump to stdout.
 		fmt.Println(content)
 	}
 }
