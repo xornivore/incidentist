@@ -69,7 +69,7 @@ func main() {
 			exit("missing confluence auth token (CONFLUENCE_API_TOKEN)")
 		}
 		if *spaceKey == "" {
-			exit("missing space key (--space-key)")
+			exit("missing space key (--confluence-space)")
 		}
 	}
 
