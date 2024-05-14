@@ -81,9 +81,6 @@ func fetchIncidents(team, ddApiKey, ddAppKey string, since, until time.Time) ([]
 
 	// The raw API response actually contains the incident commander embedded in the incidents, but the SDK doesn't expose it, as this is technically not JSON:API compliant. The SDK only exposes an ID in the relationships.
 	// Instead we extract the incident commander data from the facets and use the commander UUID provided to map back to the full commander data
-	if resp.Data.Attributes.Facets.Commander == nil {
-		return nil, fmt.Errorf("Commander facet missing from response")
-	}
 	commanders := getIncidentCommanderMap(resp)
 
 	var incidents []*incident
@@ -94,8 +91,11 @@ func fetchIncidents(team, ddApiKey, ddAppKey string, since, until time.Time) ([]
 		}
 		id := data.Attributes.GetPublicId()
 
-		commanderId := data.Relationships.CommanderUser.Data.Get().Id
-		commander := commanders[commanderId]
+		var commander datadogV2.IncidentSearchResponseUserFacetData
+		if commanderData := data.Relationships.CommanderUser.Data.Get(); commanderData != nil {
+			commanderId := commanderData.Id
+			commander = commanders[commanderId]
+		}
 
 		incident := &incident{
 			id:                     fmt.Sprintf("#incident-%d", id),
