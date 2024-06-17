@@ -12,8 +12,8 @@ import (
 
 var (
 	authToken  = kingpin.Flag("auth", "Auth token").String()
-	team       = kingpin.Flag("team", "Team").Required().String()
-	pdTeam     = kingpin.Flag("pd-team", "Team in PagerDuty if different from Team").String()
+	teams      = kingpin.Flag("team", "Team names").Required().Strings()
+	pdTeams    = kingpin.Flag("pd-team", "Team names in PagerDuty if different from Team").Strings()
 	since      = kingpin.Flag("since", "Since date/time").Required().String()
 	until      = kingpin.Flag("until", "Until date/time").Required().String()
 	urgency    = kingpin.Flag("urgency", "Urgency").Default("high").String()
@@ -36,7 +36,11 @@ func exit(format string, a ...interface{}) {
 
 func main() {
 	kingpin.Parse()
-	*team = strings.ToLower(*team)
+
+	for i, team := range *teams {
+		(*teams)[i] = strings.ToLower(team)
+	}
+
 	if *authToken == "" {
 		*authToken = os.Getenv("PD_AUTH_TOKEN")
 	}
@@ -74,8 +78,8 @@ func main() {
 	}
 
 	generateRequest := report.GenerateRequest{
-		Team:       *team,
-		PdTeam:     *pdTeam,
+		Teams:      *teams,
+		PdTeams:    *pdTeams,
 		Since:      *since,
 		Until:      *until,
 		TagFilters: *tagFilters,

@@ -13,10 +13,10 @@ const (
 )
 
 type GenerateRequest struct {
-	// Name of Datadog team
-	Team       string
-	// Name of PagerDuty team
-	PdTeam     string
+	// Name of Datadog teams
+	Teams      []string
+	// Name of PagerDuty teams
+	PdTeams    []string
 	// Start date of the report, in the format "YYYY-MM-DD" i.e. time.DateOnly
 	Since      string
 	// End date of the report, in the format "YYYY-MM-DD" i.e. time.DateOnly
@@ -43,16 +43,20 @@ func Generate(request GenerateRequest) (string, error) {
 		return "", err
 	}
 
-	incidents, err := fetchIncidents(request.Team, request.DdApiKey, request.DdAppKey, sinceAt, untilAt)
+	incidents, err := fetchIncidents(request.Teams, request.DdApiKey, request.DdAppKey, sinceAt, untilAt)
 	if err != nil {
 		return "", err
 	}
 
-	pagerdutyTeam := request.Team
-	if request.PdTeam != "" {
-		pagerdutyTeam = strings.ToLower(request.PdTeam)
+	pagerdutyTeams := request.Teams
+	if len(request.PdTeams) > 0 {
+		pagerdutyTeams = request.PdTeams
+
+		for i, team := range pagerdutyTeams {
+			pagerdutyTeams[i] = strings.ToLower(team)
+		}
 	}
-	pages, err := fetchPages(pagerdutyTeam, request.Since, request.Until, request.TagFilters, request.AuthToken, request.Urgency, request.Replace)
+	pages, err := fetchPages(pagerdutyTeams, request.Since, request.Until, request.TagFilters, request.AuthToken, request.Urgency, request.Replace)
 	if err != nil {
 		return "", err
 	}
@@ -71,7 +75,7 @@ func Generate(request GenerateRequest) (string, error) {
 
 	report := strings.Builder{}
 
-	title := strings.Title(fmt.Sprintf("%s On-Call Report %s", request.Team, request.Until))
+	title := strings.Title(fmt.Sprintf("%s On-Call Report %s", strings.Join(request.Teams, ", "), request.Until))
 	report.WriteString("---\n")
 	report.WriteString(fmt.Sprintf("title: %s\n", title))
 	report.WriteString("---\n")

@@ -27,7 +27,7 @@ type page struct {
 	notes       []pageNote
 }
 
-func fetchPages(pagerdutyTeam, since, until string, tagFilters []string, authToken string, urgency string, replace []string) ([]*page, error) {
+func fetchPages(pagerdutyTeams []string, since, until string, tagFilters []string, authToken string, urgency string, replace []string) ([]*page, error) {
 	client := pagerduty.NewClient(authToken)
 
 	regexReplace, err := getRegexReplace(replace)
@@ -35,14 +35,14 @@ func fetchPages(pagerdutyTeam, since, until string, tagFilters []string, authTok
 		return nil, err
 	}
 
-	teamID, err := getTeamId(pagerdutyTeam, client)
+	teamIDs, err := getTeamIds(pagerdutyTeams, client)
 	if err != nil {
 		return nil, err
 	}
 
 	incResp, err := client.ListIncidentsWithContext(context.Background(), pagerduty.ListIncidentsOptions{
 		Limit:     1000,
-		TeamIDs:   []string{teamID},
+		TeamIDs:   teamIDs,
 		Since:     since,
 		Until:     until,
 		Urgencies: []string{urgency},
@@ -202,7 +202,31 @@ func getTagsFromPagerdutyAlert(alert pagerduty.IncidentAlert) map[string]struct{
 	return alertTags
 }
 
-// getTeamId searches for the pager duty team id given its team name
+// getTeamIds searches for the pagerduty team ids given their team names
+func getTeamIds(teams []string, client *pagerduty.Client) ([]string, error) {
+	teamIDs := make([]string, 0, len(teams))
+	errs := make([]error, 0, len(teams))
+	for _, team := range teams {
+		teamID, err := getTeamId(team, client)
+		if err == nil {
+			teamIDs = append(teamIDs, teamID)
+		} else {
+			errs = append(errs, err)
+		}
+	}
+
+	if len(teamIDs) == 0 {
+		return nil, fmt.Errorf("could not find any team IDs: %v", errs)
+	}
+
+	if len(errs) > 0 {
+		fmt.Fprintf(os.Stderr, "WARN: some teams could not be found: %v", errs)
+	}
+
+	return teamIDs, nil
+}
+
+// getTeamId searches for the pagerduty team id given its team name
 func getTeamId(name string, client *pagerduty.Client) (string, error) {
 	var offset uint
 	// Paginate through results until we find the team there are no more results
