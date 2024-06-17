@@ -28,7 +28,7 @@ func searchIncidents(ctx context.Context, client *datadog.APIClient, r *searchRe
 		queryOpts = append(queryOpts, fmt.Sprintf("created_after:%d", *r.createdAfter))
 	}
 	queryOpts = append(queryOpts, r.tags...)
-	query := strings.Join(queryOpts, " ")
+	query := strings.Join(queryOpts, " AND ")
 
 	queryParams := datadogV2.NewSearchIncidentsOptionalParameters().WithSort(datadogV2.INCIDENTSEARCHSORTORDER_CREATED_ASCENDING)
 
@@ -52,7 +52,7 @@ type incident struct {
 	pages                  []*page
 }
 
-func fetchIncidents(team, ddApiKey, ddAppKey string, since, until time.Time) ([]*incident, error) {
+func fetchIncidents(teams []string, ddApiKey, ddAppKey string, since, until time.Time) ([]*incident, error) {
 	ctx := getDatadogAPIContext(ddApiKey, ddAppKey)
 	configuration := datadog.NewConfiguration()
 	configuration.SetUnstableOperationEnabled("v2.SearchIncidents", true)
@@ -64,7 +64,7 @@ func fetchIncidents(team, ddApiKey, ddAppKey string, since, until time.Time) ([]
 		createdAfter:  &createdAfter,
 		createdBefore: &createdBefore,
 		tags: []string{
-			"teams:" + team,
+			getTeamFilter(teams),
 		},
 	}
 
@@ -152,4 +152,11 @@ func getIncidentCommanderMap(searchResponse datadogV2.IncidentSearchResponse) ma
 		commanderMap[*commander.Uuid] = commander
 	}
 	return commanderMap
+}
+
+func getTeamFilter(teams []string) string {
+	if len(teams) == 1 {
+		return fmt.Sprintf("teams:%s", teams[0])
+	}
+	return "teams:(" + strings.Join(teams, " OR ") + ")"
 }
