@@ -156,10 +156,10 @@ func pagerdutyIncidentMatchesTags(client *pagerduty.Client, incidentId string, t
 			continue
 		}
 
-		found := true
+		found := false
 		for _, tagFilter := range tagFilters {
-			if _, ok := alertTags[tagFilter]; !ok {
-				found = false
+			if _, ok := alertTags[tagFilter]; ok {
+				found = true
 				break
 			}
 		}
